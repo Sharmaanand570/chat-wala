@@ -1,112 +1,106 @@
-import Image from 'next/image'
+"use client"
+import { useEffect, useState, useRef } from "react"
+import io from "socket.io-client"
+
+const socket = io.connect("http://192.168.5.102:3001")
+socket.on("connect", () => {
+  console.log("connected")
+})
+socket.on("disconnect", () => {
+  console.log("disconnected")
+})
+
+export { socket }
+
+function SendedMessage({ data }) {
+  return (
+    <div className="w-full  bg-red-500 p-1">
+      <p className="text-right text-white">{data.message}</p>
+      <p className="text-right text-white">{`${data.on}`}</p>
+    </div>
+  )
+}
+
+function ReceivedMessage({ data }) {
+  return (
+    <div className="w-full bg-green-500 p-1">
+      <p className="text-left text-white">{data.message}</p>
+      <p className="text-left text-white">{`${data.on}`}</p>
+    </div>
+  )
+}
 
 export default function Home() {
+  const [sendMessage, setSendMessage] = useState([])
+  const [room, setRoom] = useState()
+  const [isRoomJoin, setIsRoomJoin] = useState(false)
+
+  let allMessage = useRef([])
+  const [isMessageArived, setIsMessageArrived] = useState([])
+  function onSendMessage() {
+    socket.emit("send_message", {
+      message: sendMessage,
+      on: new Date(),
+      room: room
+    })
+    allMessage.current = [{
+      message: sendMessage,
+      on: new Date(),
+      room: room,
+      status: "sent"
+    }, ...allMessage.current]
+    setIsMessageArrived(allMessage.current)
+    setSendMessage("")
+  }
+
+  function onJoinRooom() {
+    if (room !== "") {
+      socket.emit("join_room", room)
+      setIsRoomJoin(true)
+    }
+  }
+
+  function outFromRoom() {
+    socket.emit("out_from_room", room)
+    setIsRoomJoin(false)
+    setRoom()
+    allMessage.current = []
+    setIsMessageArrived([])
+  }
+
+  useEffect(() => {
+    socket.on("received_message", (data) => {
+      allMessage.current = [{ ...data, status: "received" }, ...allMessage.current]
+      setIsMessageArrived(allMessage.current)
+    })
+  }, [socket])
+
   return (
-    <main className="flex min-h-screen flex-col items-center justify-between p-24">
-      <div className="z-10 max-w-5xl w-full items-center justify-between font-mono text-sm lg:flex">
-        <p className="fixed left-0 top-0 flex w-full justify-center border-b border-gray-300 bg-gradient-to-b from-zinc-200 pb-6 pt-8 backdrop-blur-2xl dark:border-neutral-800 dark:bg-zinc-800/30 dark:from-inherit lg:static lg:w-auto  lg:rounded-xl lg:border lg:bg-gray-200 lg:p-4 lg:dark:bg-zinc-800/30">
-          Get started by editing&nbsp;
-          <code className="font-mono font-bold">src/app/page.js</code>
-        </p>
-        <div className="fixed bottom-0 left-0 flex h-48 w-full items-end justify-center bg-gradient-to-t from-white via-white dark:from-black dark:via-black lg:static lg:h-auto lg:w-auto lg:bg-none">
-          <a
-            className="pointer-events-none flex place-items-center gap-2 p-8 lg:pointer-events-auto lg:p-0"
-            href="https://vercel.com?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            By{' '}
-            <Image
-              src="/vercel.svg"
-              alt="Vercel Logo"
-              className="dark:invert"
-              width={100}
-              height={24}
-              priority
-            />
-          </a>
+    <main className="w-full h-screen flex-col items-center justify-between">
+      <div className="h-1/6">
+        {isRoomJoin ? <div className="bg-blue-400 flex flex-row justify-center items-center w-full p-5">
+          <span className="text-2xl text-center text-white font-bold">Room {room} </span>
+          <button onClick={outFromRoom} type="submit" className="text-white mx-2 bg-blue-700 hover:bg-blue-800 focus:ring-4 focus:outline-none focus:ring-blue-300 font-medium rounded-lg text-sm px-4 py-2 dark:bg-blue-600 dark:hover:bg-blue-700 dark:focus:ring-blue-800">Out from Room</button>
+        </div> : <div className="flex flex-row w-full p-5">
+          <input value={room} onChange={(event) => { setRoom(event.target.value) }} type="text" id="text" className="grid w-11/12 p-4 ps-10 text-sm text-gray-900 border border-gray-300 rounded-lg bg-gray-50 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500" placeholder="Join Room" required />
+          <button onClick={onJoinRooom} type="submit" className="text-white w-1/12 mx-2 bg-blue-700 hover:bg-blue-800 focus:ring-4 focus:outline-none focus:ring-blue-300 font-medium rounded-lg text-sm px-4 py-2 dark:bg-blue-600 dark:hover:bg-blue-700 dark:focus:ring-blue-800">Join</button>
+        </div>}
+      </div>
+      <div className="h-4/6 flex flex-col-reverse overflow-auto mb-4 border">
+        {isMessageArived.map((data, index) => {
+          if (data && data.status && data.status === "sent") {
+            return <SendedMessage key={index} data={data} />
+          }
+          if (data && data.status && data.status === "received") {
+            return <ReceivedMessage key={index} data={data} />
+          }
+        })}
+      </div>
+      <div className="h-1/6">
+        <div className="flex flex-row w-full p-5">
+          <input value={sendMessage} onChange={(event) => setSendMessage(event.target.value)} type="text" id="text" className="grid w-11/12 p-4 ps-10 text-sm text-gray-900 border border-gray-300 rounded-lg bg-gray-50 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500" placeholder="Message" required />
+          <button onClick={onSendMessage} type="submit" className="text-white w-1/12 mx-2 bg-blue-700 hover:bg-blue-800 focus:ring-4 focus:outline-none focus:ring-blue-300 font-medium rounded-lg text-sm px-4 py-2 dark:bg-blue-600 dark:hover:bg-blue-700 dark:focus:ring-blue-800">Send</button>
         </div>
-      </div>
-
-      <div className="relative flex place-items-center before:absolute before:h-[300px] before:w-[480px] before:-translate-x-1/2 before:rounded-full before:bg-gradient-radial before:from-white before:to-transparent before:blur-2xl before:content-[''] after:absolute after:-z-20 after:h-[180px] after:w-[240px] after:translate-x-1/3 after:bg-gradient-conic after:from-sky-200 after:via-blue-200 after:blur-2xl after:content-[''] before:dark:bg-gradient-to-br before:dark:from-transparent before:dark:to-blue-700 before:dark:opacity-10 after:dark:from-sky-900 after:dark:via-[#0141ff] after:dark:opacity-40 before:lg:h-[360px] z-[-1]">
-        <Image
-          className="relative dark:drop-shadow-[0_0_0.3rem_#ffffff70] dark:invert"
-          src="/next.svg"
-          alt="Next.js Logo"
-          width={180}
-          height={37}
-          priority
-        />
-      </div>
-
-      <div className="mb-32 grid text-center lg:max-w-5xl lg:w-full lg:mb-0 lg:grid-cols-4 lg:text-left">
-        <a
-          href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Docs{' '}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Find in-depth information about Next.js features and API.
-          </p>
-        </a>
-
-        <a
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800 hover:dark:bg-opacity-30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Learn{' '}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Learn about Next.js in an interactive course with&nbsp;quizzes!
-          </p>
-        </a>
-
-        <a
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Templates{' '}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Explore starter templates for Next.js.
-          </p>
-        </a>
-
-        <a
-          href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Deploy{' '}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Instantly deploy your Next.js site to a shareable URL with Vercel.
-          </p>
-        </a>
       </div>
     </main>
   )
